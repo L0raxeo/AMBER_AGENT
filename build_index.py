@@ -35,13 +35,13 @@ def parse_index_text(txt: str):
                 
                 if pages and cmd:
                     key = cmd.lower()
-                    # Use first and last page as range
-                    rng = {"start": min(pages), "end": max(pages)}
-                    # If duplicates, keep the widest range
+                    # Store individual pages, not ranges
+                    rng = {"pages": pages}
+                    # If duplicates, combine the page lists
                     if key in mapping:
-                        prev = mapping[key]
-                        if (rng["end"] - rng["start"]) > (prev["end"] - prev["start"]):
-                            mapping[key] = rng
+                        existing_pages = mapping[key].get("pages", [])
+                        combined_pages = list(set(existing_pages + pages))  # Remove duplicates
+                        mapping[key] = {"pages": combined_pages}
                     else:
                         mapping[key] = rng
                     continue
@@ -56,12 +56,15 @@ def parse_index_text(txt: str):
             continue
         cmd, start, end = m.group(1), int(m.group(2)), m.group(3)
         key = cmd.lower()
-        rng = {"start": int(start), "end": int(end) if end else int(start)}
-        # If duplicates, keep the **widest** range
+        start_page = int(start)
+        end_page = int(end) if end else int(start)
+        pages = list(range(start_page, end_page + 1))
+        rng = {"pages": pages}
+        # If duplicates, combine the page lists
         if key in mapping:
-            prev = mapping[key]
-            if (rng["end"] - rng["start"]) > (prev["end"] - prev["start"]):
-                mapping[key] = rng
+            existing_pages = mapping[key].get("pages", [])
+            combined_pages = list(set(existing_pages + pages))  # Remove duplicates
+            mapping[key] = {"pages": combined_pages}
         else:
             mapping[key] = rng
     return mapping
@@ -79,9 +82,26 @@ def slice_command_pdfs(index_map):
         sys.exit("Missing AMBER_Manual.pdf")
     book = fitz.open(MANUAL_PDF)
     for cmd, rng in index_map.items():
-        start, end = rng["start"] - 1, rng["end"] - 1  # zero-based
-        if start < 0 or end >= len(book) or start > end:
-            print(f"[WARN] Bad range for {cmd}: {rng['start']}-{rng['end']}")
+        # Handle both old format (start/end) and new format (pages)
+        if "pages" in rng:
+            index_pages = rng["pages"]
+        else:
+            # Fallback for old format
+            index_pages = list(range(rng["start"], rng["end"] + 1))
+        
+        # Apply +1 offset to each page and include the following page
+        actual_pages = []
+        for page in index_pages:
+            actual_pages.extend([page + 1, page + 2])  # +1 offset, then include next page
+        
+        # Remove duplicates and sort
+        actual_pages = sorted(set(actual_pages))
+        
+        # Convert to zero-based and validate
+        zero_based_pages = [p - 1 for p in actual_pages if 0 <= p - 1 < len(book)]
+        
+        if not zero_based_pages:
+            print(f"[WARN] No valid pages for {cmd}: {index_pages}")
             continue
         
         # Sanitize filename - replace problematic characters
@@ -89,7 +109,8 @@ def slice_command_pdfs(index_map):
         safe_cmd = "".join(c for c in safe_cmd if c.isalnum() or c in "._-")
         
         out = fitz.open()
-        out.insert_pdf(book, from_page=start, to_page=end)
+        for page_num in zero_based_pages:
+            out.insert_pdf(book, from_page=page_num, to_page=page_num)
         out.save(DOCS_DIR / f"{safe_cmd}.pdf")
         out.close()
     book.close()

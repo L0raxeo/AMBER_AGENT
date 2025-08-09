@@ -22,6 +22,23 @@ def best_match(query: str, choices):
     m = process.extractOne(query.lower(), choices, scorer=fuzz.WRatio)
     return (m[0], m[1]) if m else (None, 0)
 
+def _format_pages(meta):
+    """Helper function to format page numbers for display"""
+    if "pages" in meta:
+        pages = sorted(meta["pages"])
+        if len(pages) == 1:
+            return str(pages[0])
+        elif len(pages) == 2 and pages[1] == pages[0] + 1:
+            return f"{pages[0]}-{pages[1]}"
+        else:
+            return ", ".join(map(str, pages))
+    else:
+        # Fallback for old format
+        if meta["start"] == meta["end"]:
+            return str(meta["start"])
+        else:
+            return f"{meta['start']}-{meta['end']}"
+
 def read_pages_text_from_manual(cmd, meta, manual_path="AMBER_Manual.pdf"):
     # Check if text sidecar exists first (try both original and sanitized names)
     txt_path = DOCS / f"{cmd}.txt"
@@ -36,13 +53,30 @@ def read_pages_text_from_manual(cmd, meta, manual_path="AMBER_Manual.pdf"):
     
     # Pull the actual pages from the big manual to avoid stale minis
     import fitz
-    start, end = meta["start"] - 1, meta["end"] - 1
+    
+    # Handle both old format (start/end) and new format (pages)
+    if "pages" in meta:
+        # Apply +1 offset to each page for correct content
+        actual_pages = []
+        for page in meta["pages"]:
+            actual_pages.extend([page + 1, page + 2])  # +1 offset, then include next page
+        # Remove duplicates and sort, then convert to zero-based
+        page_numbers = [p - 1 for p in sorted(set(actual_pages))]
+    else:
+        # Fallback for old format
+        start, end = meta["start"] - 1, meta["end"] - 1
+        page_numbers = list(range(start, end + 1))
+    
     manual_file = ROOT / manual_path
     if not manual_file.exists():
         typer.echo(f"ERROR: {manual_path} not found")
         raise typer.Exit(1)
+    
     with fitz.open(manual_file) as book:
-        chunks = [book[p].get_text() for p in range(start, end + 1)]
+        chunks = []
+        for p in page_numbers:
+            if 0 <= p < len(book):
+                chunks.append(book[p].get_text())
     return "\n".join(chunks)
 
 def llm_client():
@@ -99,7 +133,7 @@ def make(
     user_prompt = (
         f"Program: {program}\n"
         f"User request: {query}\n"
-        f"AMBER manual pages for '{cmd}' (pp. {pages_meta['start']}-{pages_meta['end']}):\n"
+        f"AMBER manual pages for '{cmd}' (pp. {_format_pages(pages_meta)}):\n"
         f"{text}"
     )
 
