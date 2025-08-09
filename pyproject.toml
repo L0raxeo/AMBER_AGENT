@@ -1,0 +1,19 @@
+[project]
+name = "amber-agent"
+version = "0.1.0"
+description = "AMBER command/script builder (local CLI + LLM API)"
+requires-python = ">=3.10"
+dependencies = [
+  "typer==0.12.3",
+  "rapidfuzz==3.9.6",
+  "pymupdf==1.24.10",
+  "python-dotenv==1.0.1",
+  "openai==1.43.0",
+]
+
+[project.scripts]
+amber-agent = "amber_agent:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

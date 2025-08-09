@@ -1,0 +1,43 @@
+# Environment variables and API keys
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Cache directory
+.cache/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large PDF files (optional - user can add these manually)
+AMBER_Manual.pdf
+AMBER_Index.pdf
+
+# Generated docs (can be regenerated)
+docs/*.pdf
+docs/*.txt
